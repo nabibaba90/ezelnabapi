@@ -317,7 +317,7 @@ apis = {
     },
 }
 
-@app.route("/api/<api_name>", methods=["GET"])
+@app.route("/ezelnab/<api_name>", methods=["GET"])
 def api_proxy(api_name):
     if api_name not in apis:
         return jsonify({
@@ -388,8 +388,3 @@ def api_proxy(api_name):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
-
-Hocam bu apilerimi renderde yayina alcam bi reuqirements.txt ayarla bana
-
-

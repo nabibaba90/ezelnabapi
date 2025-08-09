@@ -5,8 +5,7 @@ from tabulate import tabulate  # pip install tabulate
 app = Flask(__name__)
 
 apis = {
-
-        "tc_sorgulama": {
+    "tc_sorgulama": {
         "desc": "TC Sorgulama",
         "url": "https://api.kahin.org/kahinapi/tc",
         "params": ["tc"]
@@ -318,7 +317,7 @@ apis = {
     },
 }
 
-@app.route("/ezelnabi/<api_name>")
+@app.route("/api/<api_name>")
 def api_proxy(api_name):
     if api_name not in apis:
         return "API bulunamadı", 404
@@ -387,7 +386,15 @@ def api_proxy(api_name):
 
         return Response(html_page, mimetype='text/html')
 
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            # 404 ise özel mesaj dön, hata detayını verme
+            return "<h3>❌ Kayıt bulunamadı.</h3>", 404
+        else:
+            # Diğer HTTP hatalarında hata mesajı göster
+            return f"<h3>API isteği başarısız: {e}</h3>", e.response.status_code
     except Exception as e:
+        # Diğer tüm hatalar için genel hata mesajı
         return f"<h3>API isteği başarısız: {e}</h3>", 500
 
 

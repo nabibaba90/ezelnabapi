@@ -317,7 +317,7 @@ apis = {
     },
 }
 
-@app.route("/api/<api_name>")
+@app.route("/ezelnabi/<api_name>")
 def api_proxy(api_name):
     if api_name not in apis:
         return "API bulunamadı", 404

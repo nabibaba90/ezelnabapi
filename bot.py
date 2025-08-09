@@ -1,11 +1,12 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, Response
 import requests
+from tabulate import tabulate  # pip install tabulate
 
 app = Flask(__name__)
 
-# API tanımları
 apis = {
-    "tc_sorgulama": {
+
+        "tc_sorgulama": {
         "desc": "TC Sorgulama",
         "url": "https://api.kahin.org/kahinapi/tc",
         "params": ["tc"]
@@ -317,73 +318,77 @@ apis = {
     },
 }
 
-@app.route("/ezelnab/<api_name>", methods=["GET"])
+@app.route("/ezelnabi/<api_name>")
 def api_proxy(api_name):
     if api_name not in apis:
-        return jsonify({
-            "nabiapi_sunar": True,
-            "info": {
-                "mesaj": "Hata alırsanız Telegram üzerinden @Nabi_backend hesabına yazınız :)"
-            },
-            "success": False,
-            "description": "API bulunamadı"
-        }), 404
+        return "API bulunamadı", 404
 
     api = apis[api_name]
     query_params = {}
-
     for p in api["params"]:
-        val = request.args.get(p)
-        if val is None:
-            return jsonify({
-                "nabiapi_sunar": True,
-                "info": {
-                    "mesaj": "Hata alırsanız Telegram üzerinden @Nabi_backend hesabına yazınız :)"
-                },
-                "success": False,
-                "description": f"'{p}' parametresi eksik"
-            }), 400
+        val = request.args.get(p, "")
         query_params[p] = val
 
     try:
-        headers = {
-            "User-Agent": request.headers.get(
-                "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
-            )
-        }
+        resp = requests.get(api["url"], params=query_params, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
 
-        response = requests.get(api["url"], params=query_params, headers=headers, timeout=15)
-        response.raise_for_status()
-
-        if 'application/json' in response.headers.get('Content-Type', ''):
-            data = response.json()
+        # Kayıtları çek
+        if isinstance(data, list):
+            records = data
+        elif isinstance(data, dict) and isinstance(data.get("data"), dict):
+            # "data" dict içindeyse, içindeki kayıtları al
+            records = list(data["data"].values())
+        elif isinstance(data, dict) and isinstance(data.get("data"), list):
+            records = data["data"]
         else:
-            data = response.text
+            records = []
 
-        if isinstance(data, dict) and "info" in data:
-            del data["info"]
+        if not records:
+            return "<h3>❌ Kayıt bulunamadı.</h3>"
 
-        return jsonify({
-            "nabiapi_sunar": True,
-            "info": {
-                "mesaj": "Hata alırsanız Telegram üzerinden @Nabi_backend hesabına yazınız :)"
-            },
-            "success": True,
-            "description": api["desc"],
-            "data": data
-        })
+        # Tabloya verileri hazırla
+        table_data = []
+        for person in records:
+            table_data.append([
+                person.get("TC", ""),
+                person.get("ADI", ""),
+                person.get("SOYADI", ""),
+                person.get("ANNEADI", ""),
+                person.get("BABAADI", ""),
+                person.get("DOGUMTARIHI", ""),
+                person.get("NUFUSIL", ""),
+                person.get("NUFUSILCE", "")
+            ])
 
-    except requests.RequestException as e:
-        return jsonify({
-            "nabiapi_sunar": True,
-            "info": {
-                "mesaj": "Hata alırsanız Telegram üzerinden @Nabi_backend hesabına yazınız :)"
-            },
-            "success": False,
-            "description": f"API isteği başarısız: {str(e)}"
-        }), 500
+        headers = ["TC", "Adı", "Soyadı", "Anne Adı", "Baba Adı", "Doğum Tarihi", "İl", "İlçe"]
+
+        # tabulate ile HTML tablo oluştur
+        html_table = tabulate(table_data, headers=headers, tablefmt="html")
+
+        # Basit bir HTML sayfası içinde gönder
+        html_page = f"""
+        <html>
+            <head>
+                <title>{api['desc']}</title>
+                <style>
+                    table {{border-collapse: collapse; width: 100%;}}
+                    th, td {{border: 1px solid #ccc; padding: 8px; text-align: left;}}
+                    th {{background-color: #f2f2f2;}}
+                </style>
+            </head>
+            <body>
+                <h2>{api['desc']}</h2>
+                {html_table}
+            </body>
+        </html>
+        """
+
+        return Response(html_page, mimetype='text/html')
+
+    except Exception as e:
+        return f"<h3>API isteği başarısız: {e}</h3>", 500
 
 
 if __name__ == "__main__":
